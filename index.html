@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, user-scalable=no" />
+
+<style>
+    .map {
+        width: 100%;
+        height: 430px;
+    }
+
+    .ttip {
+        width: 100%;
+        min-height: 50px;
+        text-align: center;
+        margin-top: 10px;
+    }
+    .blue {
+        color: #2c7bb6;
+    }
+    .red {
+        color: #d7191c;
+    }
+
+    #frm-geocode {
+    background: white;
+    padding: 5px;
+    float: left;
+    border: 2px solid #aaa;
+    -webkit-border-radius: 4px;
+            border-radius: 4px;
+    }
+    #frm-geocode label {
+        float: left;
+        clear: left;
+        font: 14px/16px Arial, Helvetica, sans-serif;
+    }
+    #frm-geocode .inputs {
+        float: left;
+        clear: left;
+        padding-top: 3px;
+    }
+    #frm-geocode input {
+        float: left;
+    }
+</style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css"
+integrity="sha512-Rksm5RenBEKSKFjgI3a41vrjkw4EVPlJ3+OiI65vTjIdo9brlAacEuKOiQ5OFh7cOI1bkDwLqdLw3Zg0cRJAAQ=="
+crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"
+integrity="sha512-/Nsx9X4HebavoBvEBuyp3I7od5tA0UzAxs+j83KgC8PU0kgB4XiK4Lfe4y4cgBtaRJQEIFCW+oC506aPT2L1zw=="
+crossorigin=""></script>
+
+<script src="./utfgrid.js"></script>
+
+<div id="praha" class="map"></div>
+<div id="ttip_praha" class="ttip">Vyberte ulici. <span class="red">Červenou</span> barvou jsou označeny ulice pojmenované po ženách, <span class="blue">modře</span> po mužích.</div>
+
+<div id="brno" class="map"></div>
+<div id="ttip_brno" class="ttip">Vyberte ulici. <span class="red">Červenou</span> barvou jsou označeny ulice pojmenované po ženách, <span class="blue">modře</span> po mužích.</div>
+
+<div id="ostrava" class="map"></div>
+<div id="ttip_ostrava" class="ttip">Vyberte ulici. <span class="red">Červenou</span> barvou jsou označeny ulice pojmenované po ženách, <span class="blue">modře</span> po mužích.</div>
+<script>
+
+function makeMap(div, center, zoom) {
+    var map = L.map(div, {
+        zoom: zoom,
+        minZoom: 8,
+        maxZoom: 13,
+    })
+
+    map.setView(center);
+
+    map.scrollWheelZoom.disable()
+
+     var bg = L.tileLayer('https://samizdat.cz/tiles/ton_b1/{z}/{x}/{y}.png', {
+        attribution: 'mapová data © přispěvatelé <a target="_blank" href="http://osm.org">'
+            + 'OpenStreetMap</a>, obrazový podkres <a target="_blank" href="http://stamen.com">Stamen</a>, <a target="_blank" href="https://samizdat.cz">Samizdat</a>, ' 
+            + 'vrstva ulic <a target="_blank" href="https://www.cuzk.cz/ruian/RUIAN.aspx">ČÚZK</a>'
+    }).addTo(map);
+
+    var houses = L.tileLayer('./tiles/{z}/{x}/{y}.png', {
+    }).addTo(map);
+
+    var geoNames =  L.tileLayer('https://samizdat.cz/tiles/ton_l2/{z}/{x}/{y}.png', {
+    }).addTo(map);
+
+    var utfGrid = new L.UtfGrid('./tiles/{z}/{x}/{y}.grid.json', {
+        useJsonP: false
+    });
+
+    utfGrid.addTo(map);
+
+    function makeTtip(dct) {
+    var clr = {'F': 'red', 'M': 'blue'};
+        return '<span class="' + clr[dct.gender] + '"><b>' + dct.Nazev + '</b></span>, ' + dct.mesto
+    }
+    
+    utfGrid.on('mouseover', function (e) {
+        document.getElementById('ttip_' + div).innerHTML = makeTtip(e.data);
+    });
+
+    utfGrid.on('mouseout', function () {
+        document.getElementById('ttip_' + div).innerHTML = 'Vyberte ulici. <span class="red">Červenou</span> barvou jsou' 
+        + ' označeny ulice pojmenované po ženách, <span class="blue">modře</span> po mužích.'
+    });
+
+     //geocoder
+    var gcoder = L.control({position: 'topleft'});
+    gcoder.onAdd = function(map){
+        var div = L.DomUtil.create('div', 'gcoder');
+        div.innerHTML = '<form action="?" id="frm-geocode"><label for="inp-geocode">Najít adresu</label><div class="inputs"><input type="text" id="inp-geocode"' 
+            + ' placeholder="Milady Horákové"><input type="submit" value="Najít"></div></form>';
+        return div;
+    }
+    gcoder.addTo(map);
+
+    var form = document.getElementById("frm-geocode");
+    var geocoder = null;
+    var geocodeMarker = null;
+    form.onsubmit = function(event) {
+        event.preventDefault();
+        var text = document.getElementById("inp-geocode").value;
+        
+        $.get( "https://api.mapy.cz/geocode?query=" + text, function(data) {
+            if (typeof $(data).find('item').attr('x') == 'undefined') {
+                alert('Bohužel, adresu "' + text + '" nebylo možné najít.');
+                return;
+            }
+            var x = parseFloat($(data).find('item').attr('x'))
+            var y = parseFloat($(data).find('item').attr('y'))
+            map.setView([y, x], 16);    
+        }, 'xml');  
+    };
+};
+
+makeMap('praha', [50.0835494, 14.4341414], 12)
+makeMap('brno', [49.2002211, 16.6078411], 12) 
+makeMap('ostrava', [49.8346453, 18.2820442], 12) 
+</script>
